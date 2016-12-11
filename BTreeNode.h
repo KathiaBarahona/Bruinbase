@@ -7,8 +7,8 @@
  * @date 5/28/2008
  */
 
-#ifndef BTREENODE_H
-#define BTREENODE_H
+#ifndef BTNODE_H
+#define BTNODE_H
 
 #include "RecordFile.h"
 #include "PageFile.h"
@@ -18,6 +18,12 @@
  */
 class BTLeafNode {
   public:
+   /**
+    * Class constructor.
+    * Clears the buffer and computes maxKeyCount.
+    */
+    BTLeafNode();
+
    /**
     * Insert the (key, rid) pair to the node.
     * Remember that all keys inside a B+tree node should be kept sorted.
@@ -41,15 +47,13 @@ class BTLeafNode {
     RC insertAndSplit(int key, const RecordId& rid, BTLeafNode& sibling, int& siblingKey);
 
    /**
-    * If searchKey exists in the node, set eid to the index entry
-    * with searchKey and return 0. If not, set eid to the index entry
-    * immediately after the largest index key that is smaller than searchKey, 
-    * and return the error code RC_NO_SUCH_RECORD.
-    * Remember that keys inside a B+tree node are always kept sorted.
+    * Find the index entry whose key value is larger than or equal to searchKey
+    * and output the eid (entry id) whose key value &gt;= searchKey.
+    * Remember that keys inside a B+tree node are sorted.
     * @param searchKey[IN] the key to search for.
-    * @param eid[OUT] the index entry number with searchKey or immediately
-                      behind the largest key smaller than searchKey.
-    * @return 0 if searchKey is found. If not, RC_NO_SEARCH_RECORD.
+    * @param eid[OUT] the entry number that contains a key larger              
+    *                 than or equalty to searchKey.
+    * @return 0 if successful. Return an error code if there is an error.
     */
     RC locate(int searchKey, int& eid);
 
@@ -67,7 +71,6 @@ class BTLeafNode {
     * @return the PageId of the next sibling node 
     */
     PageId getNextNodePtr();
-
 
    /**
     * Set the next slibling node PageId.
@@ -97,6 +100,11 @@ class BTLeafNode {
     * @return 0 if successful. Return an error code if there is an error.
     */
     RC write(PageId pid, PageFile& pf);
+    
+    char * getBuffer()
+    {
+        return buffer;
+    }
 
   private:
    /**
@@ -104,6 +112,19 @@ class BTLeafNode {
     * that contains the node.
     */
     char buffer[PageFile::PAGE_SIZE];
+
+   /**
+    * A structure representing an entry of a leaf node.
+    */
+    struct NodeEntry {
+      int key;
+      RecordId rid;
+    };
+
+   /**
+    * The maximum number of keys that can be stored in a node.
+    */
+    const int maxKeyCount;
 }; 
 
 
@@ -112,6 +133,12 @@ class BTLeafNode {
  */
 class BTNonLeafNode {
   public:
+   /**
+    * Class constructor.
+    * Computes maxKeyCount.
+    */
+    BTNonLeafNode();
+
    /**
     * Insert a (key, pid) pair to the node.
     * Remember that all keys inside a B+tree node should be kept sorted.
@@ -144,6 +171,14 @@ class BTNonLeafNode {
     * @return 0 if successful. Return an error code if there is an error.
     */
     RC locateChildPtr(int searchKey, PageId& pid);
+
+   /**
+    * Read the pid from the eid entry.
+    * @param eid[IN] the entry number to read the pid from
+    * @param pid[OUT] the PageId from the slot
+    * @return 0 if successful. Return an error code if there is an error.
+    */
+    RC readEntry(int eid, PageId& pid);
 
    /**
     * Initialize the root node with (pid1, key, pid2).
@@ -182,6 +217,19 @@ class BTNonLeafNode {
     * that contains the node.
     */
     char buffer[PageFile::PAGE_SIZE];
+
+   /**
+    * A structure representing an entry of a non-leaf node.
+    */
+    struct NodeEntry {
+      int key;
+      PageId pid;
+    };
+
+   /**
+    * The maximum number of keys that can be stored in a node.
+    */
+    const int maxKeyCount;
 }; 
 
-#endif /* BTREENODE_H */
+#endif /* BTNODE_H */

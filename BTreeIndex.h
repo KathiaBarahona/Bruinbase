@@ -25,6 +25,10 @@ typedef struct {
   PageId  pid;  
   // The entry number inside the node
   int     eid;  
+  
+  char    pageBuf[PageFile::PAGE_SIZE];
+  
+  PageId  bufferPid;  
 } IndexCursor;
 
 /**
@@ -49,7 +53,7 @@ class BTreeIndex {
    * @return error code. 0 if no error
    */
   RC close();
-    
+
   /**
    * Insert (key, RecordId) pair to the index.
    * @param key[IN] the key for the value inserted into the index
@@ -59,22 +63,24 @@ class BTreeIndex {
   RC insert(int key, const RecordId& rid);
 
   /**
-   * Run the standard B+Tree key search algorithm and identify the
-   * leaf node where searchKey may exist. If an index entry with
-   * searchKey exists in the leaf node, set IndexCursor to its location 
-   * (i.e., IndexCursor.pid = PageId of the leaf node, and
-   * IndexCursor.eid = the searchKey index entry number.) and return 0. 
-   * If not, set IndexCursor.pid = PageId of the leaf node and 
-   * IndexCursor.eid = the index entry immediately after the largest 
-   * index key that is smaller than searchKey, and return the error 
-   * code RC_NO_SUCH_RECORD.
+   * Find the leaf-node index entry whose key value is larger than or
+   * equal to searchKey and output its location (i.e., the page id of the node
+   * and the entry number in the node) as "IndexCursor."
+   * IndexCursor consists of pid (page id of the node that contains the 
+   * searchKey) and eid (the entry number inside the node)
+   * to indicate the location of a particular index entry in the B+tree.
+   * Note that, for range queries, we need to scan the B+tree leaf nodes.
+   * For example, if the query is "key > 1000", we should scan the leaf
+   * nodes starting with the key value 1000. For this reason,
+   * this function returns the location of the leaf node entry
+   * for a given searchKey, instead of returning the RecordId
+   * associated with the searchKey.
    * Using the returned "IndexCursor", you will have to call readForward()
    * to retrieve the actual (key, rid) pair from the index.
    * @param key[IN] the key to find
-   * @param cursor[OUT] the cursor pointing to the index entry with 
-   *                    searchKey or immediately behind the largest key 
-   *                    smaller than searchKey.
-   * @return 0 if searchKey is found. Othewise, an error code
+   * @param cursor[OUT] the cursor pointing to the first index entry
+   * with the key value
+   * @return error code. 0 if no error.
    */
   RC locate(int searchKey, IndexCursor& cursor);
 
@@ -89,6 +95,44 @@ class BTreeIndex {
   RC readForward(IndexCursor& cursor, int& key, RecordId& rid);
   
  private:
+  /*
+   * Insert (key, RecordId) pair at the root level.
+   * @warning This function should not be called directly.
+   * @param key[IN] the key for the value inserted into the index
+   * @param rid[IN] the RecordId for the record being inserted into the index
+   * @return error code. 0 if no error
+   */
+  RC insertAtRoot(int key, const RecordId&);
+  
+  /*
+   * Inserts a (key, RecordId) pair into a leaf node.
+   * @warning This function should not be called directly.
+   * @param key[IN] the key for the value inserted into the index
+   * @param rid[IN] the RecordId for the record being inserted into the index
+   * @param pid[IN] pid of the node where the search should begin
+   * @param newNodeKey[OUT] the first key of the newly inserted node in case of an
+   * overflow, otherwise -1
+   * @param newNodePid[OUT] newly inserted node's pid in case of an overflow
+   * @return error code. 0 if no error
+   */
+  RC insertAtLeafNode(int key, const RecordId& rid, PageId pid,
+                      int& newNodeKey, PageId& newNodePid);
+
+  /*
+   * Recursively insert a (key, RecordId) pair into the index.
+   * @warning This function should not be called directly.
+   * @param key[IN] the key for the value inserted into the index
+   * @param rid[IN] the RecordId for the record being inserted into the index
+   * @param pid[IN] pid of the node where the search should begin
+   * @param height[IN] the height of the pid node (e.g. root has height 1)
+   * @param newNodeKey[OUT] the first key of the newly inserted node in case of an
+   * overflow, otherwise -1
+   * @param newNodePid[OUT] newly inserted node's pid in case of an overflow
+   * @return error code. 0 if no error
+   */
+  RC insertAtNonLeafNode(int key, const RecordId& rid, PageId pid, int height,
+                         int& newNodeKey, PageId& newNodePid);
+
   PageFile pf;         /// the PageFile used to store the actual b+tree in disk
 
   PageId   rootPid;    /// the PageId of the root node
